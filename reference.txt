@@ -32,3 +32,17 @@ Truck chunk - next 8 elements [14-21]
 #define CMD_COMMON_STOP            0xfc
 #define CMD_COMMON_SENSING         0xfe
 #define CMD_COMMON_RESET           0xff
+
+<Track Chunk> = <chunk type><length><MTrk event>
+<MTrk event> = <delta-time><event>
+<event> = <MIDI event> | <sysex event> | <meta-event>
+Track Chunk
+    chunk type
+    length
+    MTrk event
+        delta-time
+        event
+            MIDI event(messages/commands)
+                note-off/note-on/key-pressure/control-change/pgm-change/chan-pressure/pitch-change/...
+            sysex event
+            meta-event FF ttype llength
