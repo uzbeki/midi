@@ -13,7 +13,7 @@
 #define CMD_PITCH_CHANGE           0xe0
 // common events
 #define CMD_SYSTEM_EXCLUSIVE       0xf0
-
+#define DELTA_TIME_MSB             0x80
 #define CMD_COMMON_MTC_QUARTER     0xf1
 #define CMD_COMMON_SONG_POS        0xf2
 #define CMD_COMMON_SONG_SELECT     0xf3
