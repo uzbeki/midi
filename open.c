@@ -23,19 +23,7 @@ void analyze_header_chunk(unsigned char channel) {
 }
 
 void delta_time(unsigned char channel, FILE* open_file) {
-    if (channel >= CMD_NOTE_OFF && channel != CMD_COMMON_RESET) {
-        channel = fgetc(open_file);
-        if (channel >= CMD_NOTE_OFF) {
-            channel = fgetc(open_file);
-            if (channel >= CMD_NOTE_OFF) {
-                channel = fgetc(open_file);
-                count++;
-            }
-            count++;
-        }
-        count++;
-    }
-
+    for (int i = 0; channel >= CMD_NOTE_OFF && i < 3; i++, count++) { channel = fgetc(open_file); }
 }
 
 bool is_midi(char* file_location) {
@@ -56,19 +44,14 @@ unsigned char move_twice(unsigned char chan, FILE* file) {
 }
 void analyze_meta_event(unsigned char channel, FILE* open_file) {
     channel = move_twice(channel, open_file);
-    for (int i = 0; i < channel; i++) {
-        channel = fgetc(open_file);
-        count++;
-    }
+    for (int i = 0; i < channel; i++, count++) { channel = fgetc(open_file); }
     meta_events++;
 }
 
 void analyze_sys_ex(unsigned char channel, FILE* open_file) {
     channel = fgetc(open_file); //next length
     count++;
-    for (size_t i = 0; i < channel; i++, count++) {
-        channel = fgetc(open_file);
-    }
+    for (size_t i = 0; i < channel; i++, count++) { channel = fgetc(open_file); }
     system_exclusive++;
 }
 
