@@ -177,7 +177,8 @@ void get_hex_data(char* loc) {
     int i = 0;
     while (!feof(ptr)) {
         ch = fgetc(ptr);
-        fprintf(writing_file, "0x%.2x[%d] ", ch, i);
+        // fprintf(writing_file, "0x%.2x[%d] ", ch, i);
+        fprintf(writing_file, "%.2x ", ch);
         i++;
     }
     fclose(writing_file); //closes the open file
@@ -237,7 +238,7 @@ int main() {
 
     } else { printf("\tThis is not a midi file.\n"); }
 
-    // get_hex_data(location);
+    get_hex_data(location);
     return 0;
 }
 
