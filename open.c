@@ -32,9 +32,10 @@ void analyze_header_chunk(unsigned char channel) {
 // 1バイトの時の時間データ：0x7F
 // 2バイトの時の時間データ：0x81 0x7F
 // 3バイトの時の時間データ：0x81 0x81 0x7F
-// 4バイトの時の時間データ：0x81 0x81 0x810x7F */
+// 4バイトの時の時間データ：0x81 0x81 0x81 0x7F */
 void delta_time(unsigned char channel, FILE* open_file) {
-    if (channel >= CMD_NOTE_OFF) {
+    // printf("\ndelta-time channel - %.2x\n", channel);
+    if (channel >= CMD_NOTE_OFF && channel != CMD_COMMON_RESET) {
         channel = fgetc(open_file);
         if (channel >= CMD_NOTE_OFF) {
             channel = fgetc(open_file);
@@ -49,6 +50,7 @@ void delta_time(unsigned char channel, FILE* open_file) {
         count++;
         return;
     }
+    // printf("\tdelta-time channel END - %.2x\n", channel);
     return;
 }
 
@@ -66,6 +68,39 @@ bool is_midi(char* file_location) {
     }
 }
 
+/* ・メタイベント
+　FF aa bb cc dd ee
+　最初に0xFFが来た場合、メタイベントとなる、
+　次aaはイベントタイプで
+　次のbbにデータの長さが入る。
+　FF aa bb cc dd ee
+　上記のようなデータだった場合はbbに「03」が入る */
+void analyze_meta_event(unsigned char channel, FILE* open_file) {
+    // printf("\nchannel[%d] inside analyze_meta-event - %.2x\n", count, channel);
+    channel = fgetc(open_file);
+    channel = fgetc(open_file); //bb 
+    count += 2;
+    for (int i = 0; i < channel; i++) {
+        channel = fgetc(open_file);
+        count++;
+    }
+    meta_events++;
+    // printf("\tchannel meta-ev=%d END - %.2x\n", meta_events, channel);
+    return;
+}
+
+void analyze_sys_ex(unsigned char channel, FILE* open_file) {
+    channel = fgetc(open_file); //next length
+    count++;
+    for (size_t i = 0; i < channel; i++, count++) {
+        channel = fgetc(open_file);
+    }
+    system_exclusive++;
+}
+
+
+
+
 void count_events(unsigned char channel, FILE* open_file) {
     /*
         1000nnnn //nnnn is midi channel number iranai
@@ -78,6 +113,9 @@ void count_events(unsigned char channel, FILE* open_file) {
     // 1111 0000
 
     switch (channel) {
+    case CMD_SYSTEM_EXCLUSIVE:
+        analyze_sys_ex(channel, open_file);
+        break;
     case CMD_NOTE_ON: //note on
         // printf("\ninside NOTE ON - %.2x\n", channel);
         channel = fgetc(open_file); //key
@@ -126,43 +164,21 @@ void count_events(unsigned char channel, FILE* open_file) {
         count += 2;
         pitch_change++;
         break;
-    case CMD_SYSTEM_EXCLUSIVE:
-        channel = fgetc(open_file);
-        for (size_t i = 0; i < channel; i++, count++) {
-            channel = fgetc(open_file);
-        }
-        count++;
-        system_exclusive++;
-        break;
     }
+
     return;
 }
 
-/* ・メタイベント
-　FF aa bb cc dd ee
-　最初に0xFFが来た場合、メタイベントとなる、
-　次aaはイベントタイプで
-　次のbbにデータの長さが入る。
-　FF aa bb cc dd ee
-　上記のようなデータだった場合はbbに「03」が入る */
-void analyze_meta_event(unsigned char channel, FILE* open_file) {
-    channel = fgetc(open_file);
-    channel = fgetc(open_file); //bb 
-    count += 2;
-    for (int i = 0; i < channel; i++) {
-        channel = fgetc(open_file);
-        count++;
-    }
-    return;
-}
 
 void get_hex_data(char* loc) {
     unsigned char ch;
     FILE* ptr = fopen(loc, "rb");
     FILE* writing_file = fopen("binary.txt", "w");
+    int i = 0;
     while (!feof(ptr)) {
         ch = fgetc(ptr);
-        fprintf(writing_file, "%.2x ", ch);
+        fprintf(writing_file, "0x%.2x[%d] ", ch, i);
+        i++;
     }
     fclose(writing_file); //closes the open file
     fclose(ptr);
@@ -191,21 +207,26 @@ void calculate_results() {
     printf("\tChannel pressure: %d\n", channel_pressure);
     printf("\tPitch wheel change: %d\n", pitch_change);
     printf("\tSystem Exclusive: %d\n", system_exclusive);
+    printf("\tMeta-events: %d\n", meta_events);
     return;
 }
 
 int main() {
     if (is_midi(location)) {    //.midだったら
         FILE* file_pointer = fopen(location, "rb"); //opens the binary file "rb" read binary
+        count = 0;
         while (!feof(file_pointer) && count <= 21) {
             analyze_header_chunk(fgetc(file_pointer));   // header chunk analysis
             count++;
         }
         track_len = (track.track_len1 << 8) + track.track_len2 + (track.track_len3 << 8) + track.track_len4;
 
-
-        for (count; count <= track_len + 21 && !feof(file_pointer); count++)         {
-            delta_time(fgetc(file_pointer), file_pointer);
+        // for (count; count <= 41 && !feof(file_pointer); count++) {
+        for (count; count <= track_len + 21 && !feof(file_pointer); count++) {
+            ch = fgetc(file_pointer);
+            if (ch == CMD_COMMON_RESET) { analyze_meta_event(ch, file_pointer); }
+            if (ch == CMD_SYSTEM_EXCLUSIVE) { analyze_sys_ex(ch, file_pointer); }
+            delta_time(ch, file_pointer);
             ch = fgetc(file_pointer);
             count++;
             ch == CMD_COMMON_RESET ? analyze_meta_event(ch, file_pointer) : count_events(ch, file_pointer);
@@ -213,7 +234,6 @@ int main() {
 
         fclose(file_pointer); //closes the open file
         calculate_results();
-        printf("\ncount: %d\n", count);
 
     } else { printf("\tThis is not a midi file.\n"); }
 

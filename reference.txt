@@ -46,3 +46,25 @@ Track Chunk
                 note-off/note-on/key-pressure/control-change/pgm-change/chan-pressure/pitch-change/...
             sysex event
             meta-event FF ttype llength
+
+
+
+
+ノートオン
+　5269
+ノートオフ
+　5269
+ポリフォニックキープレッシャー
+　0
+コントロールチェンジ
+　914
+プログラムチェンジ
+　31
+チャンネルプレッシャー
+　0
+ピッチベンド
+　36
+システムエクスクルーシブ
+　9
+メタイベント
+　8
