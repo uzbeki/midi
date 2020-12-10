@@ -1,16 +1,11 @@
 #include "declarations.h"
 struct Header header;
 struct Track track;
-
-
-
-
-// char* location = "midis/aladdin.mid";   //midi file
-char* location = "midis/miki.mid";   //midi file
-// char* location = "miki.txt";   //NOT a midi file
 unsigned char ch;
 int count;
 
+// char* location = "midis/aladdin.mid";   //midi file
+char* location = "midis/miki.mid";   //midi file
 
 void analyze_header_chunk(unsigned char channel) {
     switch (count) {
@@ -25,68 +20,47 @@ void analyze_header_chunk(unsigned char channel) {
     case 20: track.track_len3 = channel; break;
     case 21: track.track_len4 = channel; break;
     }
-    return;
 }
 
-/* checks if channel is delta time or not
-// 1バイトの時の時間データ：0x7F
-// 2バイトの時の時間データ：0x81 0x7F
-// 3バイトの時の時間データ：0x81 0x81 0x7F
-// 4バイトの時の時間データ：0x81 0x81 0x81 0x7F */
 void delta_time(unsigned char channel, FILE* open_file) {
-    // printf("\ndelta-time channel - %.2x\n", channel);
     if (channel >= CMD_NOTE_OFF && channel != CMD_COMMON_RESET) {
         channel = fgetc(open_file);
         if (channel >= CMD_NOTE_OFF) {
             channel = fgetc(open_file);
-            // delta time
             if (channel >= CMD_NOTE_OFF) {
                 channel = fgetc(open_file);
                 count++;
             }
             count++;
-            return;
         }
         count++;
-        return;
     }
-    // printf("\tdelta-time channel END - %.2x\n", channel);
-    return;
+
 }
 
 bool is_midi(char* file_location) {
-    char ch;
     unsigned char aim[16] = { 0x4d, 0x54, 0x68, 0x64 };
     FILE* file_pointer = fopen(file_location, "rb"); //opens the binary file "rb" read binary
     for (size_t count = 0; count < 4 && !feof(file_pointer); count++) {
         ch = fgetc(file_pointer);
-        // printf("ch is %x\n", ch);
         if (ch != *(aim + count)) {
             fclose(file_pointer); //closes the open file
             return false;
         }
     }
 }
-
-/* ・メタイベント
-　FF aa bb cc dd ee
-　最初に0xFFが来た場合、メタイベントとなる、
-　次aaはイベントタイプで
-　次のbbにデータの長さが入る。
-　FF aa bb cc dd ee
-　上記のようなデータだった場合はbbに「03」が入る */
-void analyze_meta_event(unsigned char channel, FILE* open_file) {
-    // printf("\nchannel[%d] inside analyze_meta-event - %.2x\n", count, channel);
-    channel = fgetc(open_file);
-    channel = fgetc(open_file); //bb 
+unsigned char move_twice(unsigned char chan, FILE* file) {
+    chan = fgetc(file);
     count += 2;
+    return fgetc(file);
+}
+void analyze_meta_event(unsigned char channel, FILE* open_file) {
+    channel = move_twice(channel, open_file);
     for (int i = 0; i < channel; i++) {
         channel = fgetc(open_file);
         count++;
     }
     meta_events++;
-    // printf("\tchannel meta-ev=%d END - %.2x\n", meta_events, channel);
-    return;
 }
 
 void analyze_sys_ex(unsigned char channel, FILE* open_file) {
@@ -98,106 +72,39 @@ void analyze_sys_ex(unsigned char channel, FILE* open_file) {
     system_exclusive++;
 }
 
-
-
-
 void count_events(unsigned char channel, FILE* open_file) {
-    /*
-        1000nnnn //nnnn is midi channel number iranai
-        1001nnnn
-        ...
-     */
-     // status = channel & 0xf0;
     channel &= 0xf0; //1111 0000 nullifies the last 4 bits
-    // key on : 1001 nnnn
-    // 1111 0000
-
-    switch (channel) {
-    case CMD_SYSTEM_EXCLUSIVE:
+    if (channel == CMD_SYSTEM_EXCLUSIVE) {
         analyze_sys_ex(channel, open_file);
-        break;
-    case CMD_NOTE_ON: //note on
-        // printf("\ninside NOTE ON - %.2x\n", channel);
-        channel = fgetc(open_file); //key
-        // printf("\t%.2x\n", channel);
-        count++;
-        channel = fgetc(open_file); // velocity
-        // printf("\t%.2x\n", channel);
-        channel == 0x00 ? note_off++ : note_on++;
-        count++;
-        break;
-    case CMD_NOTE_OFF: //note off
-        // printf("\ninside NOTE OFF[%d] - %.2x\n", count, channel);
-        channel = fgetc(open_file); //key
-        // printf("\t%.2x\n", channel);
-        channel = fgetc(open_file); //velocity
-        count += 2;
-        note_off++;
-        // printf("\t%.2x %dnote off++\n", channel, note_off);
-        break;
-    case CMD_KEY_PRESSURE:
-        // printf("\ninside KEY PRESSURE[%d] - %.2x\n", count, channel);
-        channel = fgetc(open_file);
-        channel = fgetc(open_file);
-        count += 2;
-        key_pressure++;
-        break;
-    case CMD_CONTROL_CHANGE:
-        channel = fgetc(open_file);
-        channel = fgetc(open_file);
-        count += 2;
-        control_change++;
-        break;
-    case CMD_PROGRAM_CHANGE:
+    } else if (channel == CMD_NOTE_ON || channel == CMD_NOTE_OFF) {
+        move_twice(channel, open_file) == 0x00 ? note_off++ : note_on++;
+    } else if (channel == CMD_KEY_PRESSURE || channel == CMD_CONTROL_CHANGE) {
+        channel == CMD_KEY_PRESSURE ? key_pressure++ : control_change++;
+        move_twice(channel, open_file);
+    } else if (channel == CMD_PROGRAM_CHANGE || channel == CMD_CHANNEL_PRESSURE) {
+        channel == CMD_PROGRAM_CHANGE ? program_change++ : channel_pressure++;
         channel = fgetc(open_file);
         count++;
-        program_change++;
-        break;
-    case 0xd0:
-        channel = fgetc(open_file);
-        count++;
-        channel_pressure++;
-        break;
-    case CMD_PITCH_CHANGE:
-        channel = fgetc(open_file);
-        channel = fgetc(open_file);
-        count += 2;
+    } else if (channel == CMD_PITCH_CHANGE) {
+        move_twice(channel, open_file);
         pitch_change++;
-        break;
     }
-
-    return;
 }
 
-
 void get_hex_data(char* loc) {
-    unsigned char ch;
     FILE* ptr = fopen(loc, "rb");
     FILE* writing_file = fopen("binary.txt", "w");
-    int i = 0;
-    while (!feof(ptr)) {
-        ch = fgetc(ptr);
-        // fprintf(writing_file, "0x%.2x[%d] ", ch, i);
-        fprintf(writing_file, "%.2x ", ch);
-        i++;
-    }
+    while (!feof(ptr)) { fprintf(writing_file, "%.2x ", fgetc(ptr)); }
     fclose(writing_file); //closes the open file
     fclose(ptr);
-    return;
 }
 
 void calculate_results() {
     file_format = (header.file_format1 << 8) + header.file_format2;
     track_count = (header.track_count1 << 8) + header.track_count2;
     dt_count = (header.dt_count1 << 8) + header.dt_count2;
-    printf("\nHeader Chunk:\n");
-    printf("\tType「チャンクタイプ」: MThd\n");
-    printf("\tLength「データ」: 6\n");
-    printf("\tFormat「フォーマット」: %d\n", file_format);
-    printf("\tTrack count「トラック数」: %d\n", track_count);
-    printf("\tDelta-time tick count「時間単位」: %d\n", dt_count);
-    printf("\nTrack Chunk:\n");
-    printf("\tType「チャンクタイプ」: MTrk\n");
+    printf("\nHeader Chunk:\n\tType「チャンクタイプ」: MThd\n\tLength「データ」: 6\n\tFormat「フォーマット」: %d\n\tTrack count「トラック数」: %d\n\tDelta-time tick count「時間単位」: %d\n", file_format, track_count, dt_count);
+    printf("\nTrack Chunk:\n\tType「チャンクタイプ」: MTrk\n");
     printf("\tTrack length「T データ長」: %d\n", track_len);
     printf("\nEvents count:\n");
     printf("\tNote on: %d\n", note_on);
@@ -209,20 +116,13 @@ void calculate_results() {
     printf("\tPitch wheel change: %d\n", pitch_change);
     printf("\tSystem Exclusive: %d\n", system_exclusive);
     printf("\tMeta-events: %d\n", meta_events);
-    return;
 }
 
 int main() {
     if (is_midi(location)) {    //.midだったら
         FILE* file_pointer = fopen(location, "rb"); //opens the binary file "rb" read binary
-        count = 0;
-        while (!feof(file_pointer) && count <= 21) {
-            analyze_header_chunk(fgetc(file_pointer));   // header chunk analysis
-            count++;
-        }
+        for (count = 0; !feof(file_pointer) && count <= 21; count++) { analyze_header_chunk(fgetc(file_pointer)); }
         track_len = (track.track_len1 << 8) + track.track_len2 + (track.track_len3 << 8) + track.track_len4;
-
-        // for (count; count <= 41 && !feof(file_pointer); count++) {
         for (count; count <= track_len + 21 && !feof(file_pointer); count++) {
             ch = fgetc(file_pointer);
             if (ch == CMD_COMMON_RESET) { analyze_meta_event(ch, file_pointer); }
@@ -232,13 +132,9 @@ int main() {
             count++;
             ch == CMD_COMMON_RESET ? analyze_meta_event(ch, file_pointer) : count_events(ch, file_pointer);
         }
-
         fclose(file_pointer); //closes the open file
         calculate_results();
-
     } else { printf("\tThis is not a midi file.\n"); }
-
     get_hex_data(location);
     return 0;
 }
-
