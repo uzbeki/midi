@@ -110,12 +110,11 @@ int main() {
     if (is_midi(location)) {    //.midだったら
         FILE* file_pointer = fopen(location, "rb"); //opens the binary file "rb" read binary
         for (count = 0; !feof(file_pointer) && count <= 21; count++) { analyze_header_chunk(fgetc(file_pointer)); }
-        track_len = (track.track_len1 << 8) + track.track_len2 + (track.track_len3 << 8) + track.track_len4;
+        track_len = (track.track_len1 << 24) + (track.track_len2 << 16) + (track.track_len3 << 8) + track.track_len4;
         for (count; count <= track_len + 21 && !feof(file_pointer); count++) {
             ch = fgetc(file_pointer);
             if (ch == CMD_SYSTEM_EXCLUSIVE) { analyze_sys_ex(ch, file_pointer); }
-            if (ch == CMD_COMMON_RESET) { analyze_meta_event(ch, file_pointer); } 
-            else {delta_time(ch, file_pointer);}
+            if (ch == CMD_COMMON_RESET) { analyze_meta_event(ch, file_pointer); } else { delta_time(ch, file_pointer); }
             ch = fgetc(file_pointer);
             count++;
             ch == CMD_COMMON_RESET ? analyze_meta_event(ch, file_pointer) : count_events(ch, file_pointer);
